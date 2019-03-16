@@ -1,140 +1,105 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const knex = require('knex');
+
+const PORT = process.env.PORT;
+
+var db = knex({
+	client: 'pg',
+	connection: {
+		host: '127.0.0.1',
+		user: 'ganga',
+		password: '',
+		database: 'biller'
+	}
+});
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const products ={
-	list: [
-		{
-			id: 1,
-			name: "Veg Burger",
-			price: 55,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 2,
-			name: "Chicken Burger",
-			price: 70,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 3,
-			name: "Veg Pizza",
-			price: 70,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 4,
-			name: "Paneer Pizza",
-			price: 100,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 5,
-			name: "Chicken Pizza",
-			price: 120,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 6,
-			name: "French Fries",
-			price: 30,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 7,
-			name: "Veg Roll",
-			price: 50,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 8,
-			name: "Veg Sandwich",
-			price: 25,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 9,
-			name: "Paneer Sandwich",
-			price: 40,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 10,
-			name: "Chicken Sandwich",
-			price: 70,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 11,
-			name: "Bombay Falooda",
-			price: 90,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 12,
-			name: "Dry Fruit Falooda",
-			price: 120,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 13,
-			name: "Vanilla Thickshake",
-			price: 60,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 14,
-			name: "Mango Thickshake",
-			price: 60,
-			stock: 20,
-			reorder: 5
-		},
-
-		{
-			id: 15,
-			name: "Paneer Tikka",
-			price: 80,
-			stock: 20,
-			reorder: 5
-		}
-
-	]
-}
-
 app.get('/', (req, res)=> {
-	res.send(products.list);
+
+	db.select().from('products_arumai').then(list => {
+		res.json(list);
+	});
+})
+app.post('/billed', (req,res) => {
+	const {items,total,date} = req.body;
+	
+	db.transaction(trx => {
+		db.insert({
+			date: date,
+			total: total
+		}).into('billhead')
+		  .transacting(trx)
+		  .returning('billno')
+		  .then(billnum => {
+		  	var billnu = billnum[0];
+		  	let itemtoAdd = items.map(item => {
+
+		  		db.select('*').from('products_arumai').where({name: item.name, inven: true}).decrement('stock', item.quantity).then(console.log(item.name))
+		  		return {
+		  			billno: billnum[0],
+		  			productname: item.name,
+		  			quantity: item.quantity,
+		  			netprice: item.amount
+		  		}
+		  	})
+		  	return trx('billdetails')
+		  		.returning('*')
+		  		.insert(itemtoAdd)
+		  		.then(res.json({status: 'success', billno: billnum}))
+		  })
+		    .then(trx.commit)
+	  		.catch(trx.rollback)
+	})
+})
+
+app.get('/exp', (req, res) => {
+
+	db.select().from('expenses').then(exp => {
+		res.json(exp);
+		console.log('check',exp);
+	});
+})
+
+app.post('/addproduct', (req,res) => {
+	const { name, price, inven, stock } = req.body;
+	db.insert({
+		name: name,
+		price: price,
+		inven: inven,
+		stock: stock
+	}).into('products_arumai').returning('*').then(prod => res.json(prod)).catch(err => res.json(err))
+})
+
+app.put('/inventory', (req,res) => {
+	const { rname, stock} = req.body;
+
+	db.select('*').from(products_arumai).where('name' === rname).update('stock', stock)
+})
+
+app.put('/billreturn', (req,res) => {
+	console.log('billreturn');
+})
+
+app.get('/dash', (req,res) => {
+	const dashProps = {
+		salesToday: [],
+		expenses: [],
+	}
+
+	db.select('*').from('billhead').where({date: new Date()})
+		.then(salestoday => {
+			console.log(salestoday);
+		});
+	db.select('*').from('products_arumai').then(samp => dashProps = {expenses: samp});
+
+	res.json(dashProps.salesToday)
 })
 
 app.listen(3000, () => {
-	console.log('app is running port 3000');
+	console.log(`app is running port 3000`);
 }) 
