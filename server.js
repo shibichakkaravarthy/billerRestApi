@@ -3,8 +3,6 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const knex = require('knex');
 
-const PORT = process.env.PORT;
-
 var db = knex({
 	client: 'pg',
 	connection: {
@@ -21,7 +19,7 @@ app.use(bodyParser.json());
 
 app.get('/', (req, res)=> {
 
-	db.select().from('products_arumai').then(list => {
+	db.select().from('products').then(list => {
 		res.json(list);
 	});
 })
@@ -39,7 +37,7 @@ app.post('/billed', (req,res) => {
 		  	var billnu = billnum[0];
 		  	let itemtoAdd = items.map(item => {
 
-		  		db.select('*').from('products_arumai').where({name: item.name, inven: true}).decrement('stock', item.quantity).then(console.log(item.name))
+		  		db.select('*').from('products').where({name: item.name, inven: true}).decrement('stock', item.quantity).then(console.log(item.name))
 		  		return {
 		  			billno: billnum[0],
 		  			productname: item.name,
@@ -72,17 +70,21 @@ app.post('/addproduct', (req,res) => {
 		price: price,
 		inven: inven,
 		stock: stock
-	}).into('products_arumai').returning('*').then(prod => res.json(prod)).catch(err => res.json(err))
+	}).into('products').returning('*').then(prod => res.json(prod)).catch(err => res.json(err))
 })
 
 app.put('/inventory', (req,res) => {
 	const { rname, stock} = req.body;
 
-	db.select('*').from(products_arumai).where('name' === rname).update('stock', stock)
+	db.select('*').from(products).where('name' === rname).update('stock', stock)
 })
 
 app.put('/billreturn', (req,res) => {
 	console.log('billreturn');
+})
+
+app.put('/stockentry', (req,res) => {
+	console.log('stockentry');
 })
 
 app.get('/dash', (req,res) => {
@@ -95,7 +97,7 @@ app.get('/dash', (req,res) => {
 		.then(salestoday => {
 			console.log(salestoday);
 		});
-	db.select('*').from('products_arumai').then(samp => dashProps = {expenses: samp});
+	db.select('*').from('products').then(samp => dashProps = {expenses: samp});
 
 	res.json(dashProps.salesToday)
 })
